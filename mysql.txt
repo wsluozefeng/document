@@ -1,0 +1,98 @@
+CASE when的用法
+在一般的SELECT中，其语法格式如下：
+SELECT <myColumnSpec> = 
+CASE <单值表达式>
+       when <表达式值> then <SQL语句或者返回值>
+       when <表达式值> then <SQL语句或者返回值>
+       ...
+       when <表达式值> then <SQL语句或者返回值>
+       else <SQL语句或者返回值> （这部分非必须）
+END
+
+举例：
+1. select case gender when 'Y' then '男' when '1' then '女' end from bigdata_customer where proj_id='39cd3b02-4463-c53c-c066-d37306d7d9af';
+将字段根据其值来区分显示：如果gender等于Y则显示为男，等于1则为女
+
+2. select count(case gender when 'Y' then gender end), count( case gender when '1' then gender end ) from bigdata_customer where proj_id='39cd3b02-4463-c53c-c066-d37306d7d9af';
+一条语句分别统计gender等于Y和等于1的记录条数
+
+3. select count(case gender when 'Y' then gender when '1' then gender end ) from bigdata_customer where proj_id='39cd3b02-4463-c53c-c066-d37306d7d9af';
+多个when之间表示或的意思：计算gender等于Y或者等于1的记录条数之和！  下面是另一种计算方法：
+select count(case gender when 'Y' then gender end) + count( case gender when '1' then gender end ) from bigdata_customer where proj_id='39cd3b02-4463-c53c-c066-d37306d7d9af';
+
+4. select count(case gender when 'Y' then gender when '1' then gender end ) as gender_sum, count(case ages when '5' then ages when '3' then ages end ) as ages_sum from bigdata_customer where proj_id='39cd3b02-4463-c53c-c066-d37306d7d9af';
+多个字段不同值的记录总数统计
+
+
+
+if表达式用法 （与 case when 能相互转换）
+前提：count(null)是不会有任何统计，返回0，而count(true)与count(1)效果一样，返回所有
+IF(condition,result1,result2)  如果condition为ture则返回result1，否则返回result2
+
+举例：
+1. select count(if(gender='Y' or gender=1,true, null)) from bigdata_customer where proj_id='39cd3b02-4463-c53c-c066-d37306d7d9af'
+计算gender等于Y或者等于1的记录条数之和
+
+
+
+IF ELSE 做为流程控制语句使用
+
+if实现条件判断，满足不同条件执行不同的操作，存储过程中的if是如何使用的吧
+
+IF search_condition THEN 
+    statement_list  
+[ELSEIF search_condition THEN]  
+    statement_list ...  
+[ELSE 
+    statement_list]  
+END IF 
+
+当IF中条件search_condition成立时，执行THEN后的statement_list语句，否则判断ELSEIF中的条件，成立则执行其后的statement_list语句，否则继续判断其他分支。当所有分支的条件均不成立时，执行ELSE分支。search_condition是一个条件表达式，可以由“=、<、<=、>、>=、!=”等条件运算符组成，并且可以使用AND、OR、NOT对多个表达式进行组合。
+
+例如，建立一个存储过程，该存储过程通过学生学号（student_no）和课程编号（course_no）查询其成绩（grade），返回成绩和成绩的等级，成绩大于90分的为A级，小于90分大于等于80分的为B级，小于80分大于等于70分的为C级，依次到E级。那么，创建存储过程的代码如下：
+
+create procedure dbname.proc_getGrade  
+(stu_no varchar(20),cour_no varchar(10))  
+BEGIN 
+declare stu_grade float;  
+select grade into stu_grade from grade where student_no=stu_no and course_no=cour_no;  
+if stu_grade>=90 then 
+    select stu_grade,'A';  
+elseif stu_grade<90 and stu_grade>=80 then 
+    select stu_grade,'B';  
+elseif stu_grade<80 and stu_grade>=70 then 
+    select stu_grade,'C';  
+elseif stu_grade70 and stu_grade>=60 then 
+    select stu_grade,'D';  
+else 
+    select stu_grade,'E';  
+end if;  
+END 
+
+
+游标
+举例子：
+BEGIN
+	DECLARE tmp_name VARCHAR(50) default '';
+	DECLARE all_name VARCHAR(255) default '';
+	
+	#声明游标
+	DECLARE get_name_cur CURSOR FOR (select proj_id from data_dev.bigdata_customer limit 3);
+	#DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET tmp_name = null; 
+ 
+	#开启游标
+	OPEN get_name_cur;
+	FETCH get_name_cur INTO tmp_name; #游标指向下一个
+	
+	WHILE(tmp_name is not NULL) DO
+		set tmp_name = CONCAT(tmp_name,';');
+		set all_name = CONCAT(all_name,tmp_name);
+		FETCH get_name_cur INTO tmp_name;  #游标持续指向下一个
+	END WHILE;
+	
+	#关闭游标
+	CLOSE get_name_cur;
+	
+	SELECT all_name;
+
+END

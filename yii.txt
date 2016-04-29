@@ -1,0 +1,77 @@
+==========================================
+日志的规整
+
+
+==========================================
+视图中渲染其他视图：
+例如，视图中的如下代码会渲染该视图所在目录下的 _overview.php 视图文件， 记住视图中 $this 对应 yii\base\View 组件:
+<?= $this->render('_overview') ?>
+
+其他地方渲染
+在任何地方都可以通过表达式 Yii::$app->view 访问 yii\base\View 应用组件， 调用它的如前所述的方法渲染视图
+// 显示视图文件 "@app/views/site/license.php"
+echo \Yii::$app->view->renderFile('@app/views/site/license.php');
+
+
+==========================================
+模块应用：
+创建模块modules：
+	在配置文件中modules参数中添加该模块
+	在modules文件中对应的模块目录下，需要有Module.php文件，具体的文件内容参考http://www.yiichina.com/doc/guide/2.0/structure-modules
+
+
+==========================================
+db配置连接组件后可以使用以下语法访问：$connection = \Yii::$app->db;  //返回的是一个db句柄
+查询构建器：    http://www.yiichina.com/doc/guide/2.0/db-query-builder
+Active Record： http://www.yiichina.com/doc/guide/2.0/db-active-record
+
+
+==========================================
+实例类
+\yii::createObject( '类名'， param ) 与 \yii::$container->get( '类名'， param， ‘配置’ )  都可以创建某个类的对象
+
+
+==========================================
+view输出json格式
+\Yii::$app->response->format = Response::FORMAT_JSON;
+
+
+
+==========================================
+yii\db\Connection 提供基类db的createCommand方法 返回一个db对象
+yii\db\Query      封装了一层的db操作类，基于yii\db\Connection的封装
+
+
+
+==========================================
+依赖注入容器
+\yii::$container->get( 'app\repositories\Repository' );  //通过container容器直接获取类的实例
+\yii::createObject( 'app\repositories\Repository' );     //createObject方法是通过调用$container的get方法实现
+
+
+
+==========================================
+服务定位器
+最常用的服务定位器是application（应用）对象，可以通过 \Yii::$app 访问
+
+
+
+==========================================
+一个类，需要使用到行为，那么就果断地继承自 yii\base\Component 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
