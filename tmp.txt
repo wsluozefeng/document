@@ -1,0 +1,69 @@
+举例：
+SELECT c.CustomerId, CompanyName FROM Customers c WHERE EXISTS( 
+	SELECT OrderID FROM Orders o WHERE o.CustomerID = cu.CustomerID
+);
+EXISTS用于检查子查询是否至少会返回一行数据，该子查询实际上并不返回任何数据，而是返回值True或False
+EXISTS 指定一个子查询，检测行的存在。语法：EXISTS subquery。参数 subquery 是一个受限的 SELECT 语句 （不允许有 COMPUTE 子句和 INTO 关键字）。结果类型为 Boolean，如果子查询包含行，则返回 TRUE。
+
+
+字段拼接
+concat（字段1，'连接符号1', 字段2, '连接符号2', 字段3 ） 连接符号是可以不同的
+concat_ws( '连接符号', 字段1, 字段2, 字段3 ) 用同一个连接符号做拼接
+group_concat() 对group操作后的字段的拼接显示
+Trim函数去除空格
+Rtrim函数去除右边的空格
+
+
+select提供了测试的功能，比如说： select 3-4; select now();
+对字段赋null,直接字段=null 即可，但是前提是该字段设置是允许为null的
+
+
+日期函数 （时间字段the_time，datetime或者timestamp类型）
+date(the_time)：只返回日期部分
+time(the_time)：只返回时间部分
+day(the_time)： 只返回天数部分 返回值是非补零的情况，year()和month()也是如此
+hour(the_time)：只返回小时部分
+举例子：订单表order中the_time字段存储了下单的时间，现在需要找出在2016年9月份这一个月的所有订单
+sql：select * from order where year(the_time) = 2016 and month(the_time) = 9;
+
+
+count()函数
+1.count(*)对表中的所有行进行统计，包括字段为null的情况
+2.count(字段) 对该字段中非null的行数进行统计
+
+
+自联结查询（同一个表的查询，通过使用用表别名）
+举例：表product，vend_id字段表示供应商id、 prod_id字段表示商品id
+需求：需要知道商品id=99的供应商的商品有哪一些
+sql： select * from product p1, product p2 where p1.vend_id = p2.vend_id and p2.prod_id=99;
+注意：一般用于取缔子查询
+
+外部联结（其实就是左查询和右查询）
+left join ：获取左边表的所有行，如果右边表没有则置为null
+right join：获取右边表的所有行，如果左边表没有则置为null
+
+
+视图
+1.视图的语句不能包含子查询，需要把子查询做成视图，然后嵌套调用
+2.视图不能使用索引，触发器和默认值，所以要考虑性能
+3.视图可以与表一起使用，同一个sql语句
+
+
+存储过程
+1.需要使用 delimiter 分隔符 来临时定义sql的语句分隔符，是的在存储过程中;能够被正确解析，除了 \ ，其他都可以作为语句分隔符
+
+mysql变量的术语分类：
+
+1.用户变量：以"@"开始，形式为"@变量名"
+用户变量跟mysql客户端是绑定的，设置的变量，只对当前用户使用的客户端生效
+
+2.全局变量：定义时，以如下两种形式出现，set GLOBAL 变量名  或者  set @@global.变量名 
+对所有客户端生效。只有具有super权限才可以设置全局变量
+
+3.会话变量：只对连接的客户端有效。
+
+4.局部变量：作用范围在begin到end语句块之间。在该语句块里设置的变量
+declare语句专门用于定义局部变量。set语句是设置不同类型的变量，包括会话变量和全局变量
+
+
+查看存储过程状态：show procedure status
