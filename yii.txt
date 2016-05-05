@@ -60,6 +60,33 @@ yii\db\Query      封装了一层的db操作类，基于yii\db\Connection的封装
 一个类，需要使用到行为，那么就果断地继承自 yii\base\Component 
 
 
+==========================================
+控制器行文新增过滤器，在控制器中重写behaviors()方法，返回过滤器类，例如：
+public function behaviors(){
+	$behaviors = [
+	    ['class'=>'app\filters\FunctionActionFilter',]  //支持多个过滤器
+	];
+	return $behaviors;
+}
+
+FunctionActionFilter类中，需要继承yii\base\ActionFilter， 然后重写beforeAction($action)方法来执行自己的过滤逻辑，如下：
+代码：
+namespace app\filters;
+use yii\base\ActionFilter;
+class FunctionActionFilter extends ActionFilter
+{
+    public function beforeAction($action)
+    {
+        //这里是过滤逻辑，成功通过返回true，否则false
+        return parent::beforeAction($action);
+    }
+}
+
+
+
+==========================================
+use yii\web\HttpException
+throw new HttpException(403, '企业代号不能为空');
 
 
 
