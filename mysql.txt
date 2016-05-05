@@ -72,13 +72,15 @@ END
 
 游标
 举例子：
+
+while形式循环
 BEGIN
-	DECLARE tmp_name VARCHAR(50) default '';
+	DECLARE tmp_name VARCHAR(50) default '';  #同类型大小的变量可以在一个declare中声明
 	DECLARE all_name VARCHAR(255) default '';
 	
 	#声明游标
 	DECLARE get_name_cur CURSOR FOR (select proj_id from data_dev.bigdata_customer limit 3);
-	#DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET tmp_name = null; 
+	DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET tmp_name = null; 
  
 	#开启游标
 	OPEN get_name_cur;
@@ -89,6 +91,51 @@ BEGIN
 		set all_name = CONCAT(all_name,tmp_name);
 		FETCH get_name_cur INTO tmp_name;  #游标持续指向下一个
 	END WHILE;
+	
+	#关闭游标
+	CLOSE get_name_cur;
+	
+	SELECT all_name;
+
+END
+
+
+
+LOOP的形式
+BEGIN
+	DECLARE tmp_name VARCHAR(50) default '';
+	DECLARE all_name VARCHAR(255) default '';
+	DECLARE the_over TINYINT(1) default 0;
+	
+	#声明游标
+	DECLARE get_name_cur CURSOR FOR (select proj_id from data_dev.bigdata_customer limit 3);
+	
+	#循环结束或者出错，设置关闭循环的开关变量
+	DECLARE CONTINUE HANDLER FOR NOT FOUND set the_over = 1;
+	
+	#开启游标
+	OPEN get_name_cur;
+	FETCH get_name_cur INTO tmp_name; #游标指向下一个
+	
+	name_loop:LOOP
+		#if the_over=0 THEN
+		#	set tmp_name = CONCAT(tmp_name,';');
+		#	set all_name = CONCAT(all_name,tmp_name);
+		#	FETCH get_name_cur INTO tmp_name; 
+		#ELSE
+		#	LEAVE name_loop;
+		#END IF;
+		
+		if the_over=1 THEN
+			LEAVE name_loop;
+		END IF;
+
+		set tmp_name = CONCAT(tmp_name,';');
+		set all_name = CONCAT(all_name,tmp_name);
+		FETCH get_name_cur INTO tmp_name; 
+		
+
+	END LOOP;
 	
 	#关闭游标
 	CLOSE get_name_cur;
