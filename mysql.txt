@@ -35,6 +35,7 @@ IF(condition,result1,result2)  如果condition为ture则返回result1，否则返回result2
 
 
 
+===============================
 IF ELSE 做为流程控制语句使用
 
 if实现条件判断，满足不同条件执行不同的操作，存储过程中的if是如何使用的吧
@@ -70,8 +71,49 @@ end if;
 END 
 
 
+==================================
+循环语句
+(1) WHILE循环
+ [ label: ]   WHILE 条件 DO    -- label 是这个循环的标记，可以在循环体内调用该标记，例如leave 标记;  表示跳出该循环
+ statements
+ END  WHILE   [ label ];
+ 
+
+(2) LOOP循环
+ [ label: ]  LOOP  -- 该方式循环终止的条件，需要在循环体中去判断处理，最终通过leave来跳出循环
+  statements
+  END  LOOP  [ label ];
+ 
+
+(3) REPEAT UNTIL循环
+ [ label: ]  REPEAT   -- 与while循环的区别在于其实先执行在判断，而while是先判断后执行
+ statements
+ UNTIL 条件
+ END  REPEAT  [ label ];
+
+
+==================================
 游标
 举例子：
+
+drop PROCEDURE if EXISTS demo;
+
+delimiter //
+create PROCEDURE demo( in the_name varchar(50), out the_nickname varchar(50))  -- 传入和传出参数
+p_demo:BEGIN  -- p_demo定义存储过程的别名，在过程中可以通过break语句跳出
+	
+	DECLARE nkname varchar(50) default '';  -- 定义局部变量
+	select `code` from t_project where `name` like CONCAT('%',the_name,'%') into nkname; -- 存储过程中变量使用like的语法
+	set the_nickname = nkname;  -- 不可使用declare，得用set
+	
+end p_demo //
+delimiter ;
+
+-- 使用方式
+CALL demo('上海闸北火车站项目-上海闸北火车站北广场C2地块', @youxi);  -- 必须使用用户变量@作为存储过程的传出变量
+select @youxi;
+
+=====================================
 
 while形式循环
 BEGIN
