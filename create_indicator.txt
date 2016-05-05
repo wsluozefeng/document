@@ -1,0 +1,211 @@
+L_END:BEGIN
+	DECLARE result_table_name,pt_name,population_table_name VARCHAR(100) DEFAULT '';
+	DECLARE cur_pt_days INT DEFAULT 0;
+
+	DECLARE v_group_condition VARCHAR(5000) DEFAULT ' 1=1 ';
+	DECLARE v_group_condition_fianl VARCHAR(5000) DEFAULT '';
+	DECLARE v_indicator_count_col TEXT DEFAULT ' count(1) AS total ';
+
+	DECLARE v_group_id CHAR(36);
+	DECLARE v_group_indicator_id CHAR(36);
+	DECLARE v_indicator_id CHAR(36);
+	DECLARE v_indicator_col_name VARCHAR(100);
+	DECLARE v_indicator_value VARCHAR(36);
+	DECLARE v_base_dim_id VARCHAR(36); -- 基础维度主键
+	DECLARE v_base_dim_value VARCHAR(100);
+	DECLARE v_base_dim_table_name VARCHAR(100); -- 基础维度数据源表
+	DECLARE v_base_dim_table_value_col VARCHAR(100); -- 基础维度数据值
+	DECLARE v_base_dim_table_filter VARCHAR(1000); -- 基础维度数据值
+	DECLARE v_base_dim_population_col  VARCHAR(100); -- 对应维度表字段名称
+	DECLARE v_base_dim_count,v_base_dim_count_step INT DEFAULT 0;
+
+	
+	DECLARE cur_done INT DEFAULT 0;
+	-- 定义游标
+
+	DECLARE cur_group CURSOR FOR (SELECT id FROM population_group); 	
+
+	DECLARE cur_group_indicator CURSOR FOR (
+			SELECT a.id,b.col_name FROM group_indicator AS a
+			INNER JOIN indicator AS b ON a.indicator_id=b.id 
+			WHERE a.group_id =v_group_id
+	);
+
+	DECLARE cur_group_indicator_value CURSOR FOR(
+			SELECT b.`value` from group_indicator_value AS a
+			INNER JOIN indicator_value AS b ON a.indicator_value_id= b.id
+			WHERE a.group_indicator_id=v_group_indicator_id
+	);
+	DECLARE cur_indicator CURSOR FOR(
+			SELECT id,col_name from indicator
+	);
+	DECLARE cur_population_base_dim CURSOR FOR(
+			SELECT id,dim_table,dim_value_col,dim_filter,population_table_col from population_base_dim
+	);
+	DECLARE CONTINUE HANDLER FOR NOT FOUND SET cur_done = 1;
+	
+	-- 检查人口表是否存在
+	SELECT `value` INTO population_table_name FROM config WHERE `name`='population_table_name';
+	IF population_table_name='' THEN
+		SELECT '人口表名未配置' AS 'error';
+		LEAVE L_END;
+	END IF;
+	
+	IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=population_table_name LIMIT 1) THEN
+		SELECT '人口表不存在' AS 'error';
+		LEAVE L_END;
+	END IF;
+
+	SET result_table_name='indicator_integrity';
+	-- 动态创建分区
+	SET cur_pt_days=TO_DAYS(NOW())+1;
+	SET pt_name=CONCAT('p',DATE_FORMAT(NOW(),'%Y%m%d'));
+  
+	-- 存在当前分区先删除分区数据
+	IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=result_table_name AND PARTITION_NAME=pt_name LIMIT 1) THEN
+		SET @s_drop_pt = CONCAT('ALTER TABLE ',result_table_name,' DROP PARTITION ',pt_name);
+		PREPARE stmt_dorp_pt FROM @s_drop_pt;  
+		EXECUTE stmt_dorp_pt;  
+		DEALLOCATE PREPARE stmt_dorp_pt;
+	END IF;
+
+
+	-- 创建新的分区
+	SET @s_create_pt=CONCAT('ALTER TABLE ',result_table_name,' ADD PARTITION (PARTITION ',pt_name,' VALUES LESS THAN (',cur_pt_days,'))');
+	-- select @s_create_pt;
+	PREPARE stmt_create_pt FROM @s_create_pt;  
+	EXECUTE stmt_create_pt;  
+	DEALLOCATE PREPARE stmt_create_pt;
+
+
+	DROP TABLE IF EXISTS tmp_dim; -- 删除临时表
+	-- 创建维度表
+	CREATE TEMPORARY TABLE tmp_dim (
+		dim_id char(36),
+		dim_value char(36),
+		population_col_name varchar(10)
+	);
+	
+	-- 获取基础维度
+	OPEN cur_population_base_dim;
+		read_population_base_dim_loop:LOOP
+			FETCH cur_population_base_dim INTO v_base_dim_id,v_base_dim_table_name,v_base_dim_table_value_col,v_base_dim_table_filter,v_base_dim_population_col;
+			IF cur_done=1 THEN
+				LEAVE read_population_base_dim_loop;
+			END IF;
+			
+			-- 获取维度表数据
+			SET @s_get_dim_data=CONCAT('INSERT INTO tmp_dim SELECT \'',v_base_dim_id,'\',',v_base_dim_table_value_col,',\'',v_base_dim_population_col,'\' FROM ',v_base_dim_table_name,' WHERE ',IFNULL(v_base_dim_table_filter,' 1=1'));
+			PREPARE stmt_get_dim_data FROM @s_get_dim_data;  
+			EXECUTE stmt_get_dim_data ;
+			DEALLOCATE PREPARE stmt_get_dim_data;
+
+		END LOOP;
+	CLOSE cur_population_base_dim;
+	SET cur_done=0;
+	SELECT COUNT(1) INTO v_base_dim_count FROM tmp_dim; -- 设置指标总数
+
+	-- 获取count指标条件
+	SET v_indicator_count_col=CONCAT(v_indicator_count_col,',CONCAT(\'\'',',\'INSERT INTO indicator_integrity(id,group_id,indicator_id,base_dim_id,base_dim_value,all_record_count,empty_record_count) VALUES \'');
+	OPEN cur_indicator;
+		read_indicator_loop:LOOP
+			FETCH cur_indicator INTO v_indicator_id,v_indicator_col_name;
+			IF cur_done=1 THEN
+				LEAVE read_indicator_loop;
+			END IF;
+			SET v_indicator_count_col=CONCAT(v_indicator_count_col,',\'(fn_newSeqId(),@v_group_id,\\\'',v_indicator_id,'\\\',@v_base_dim_id,@v_base_dim_value,@v_count_total,\',','count(IF(',v_indicator_col_name,'=\'\' OR ',v_indicator_col_name,' is NULL OR ',v_indicator_col_name,'=0 ,TRUE,NULL)),\'),\'');
+			
+		END LOOP;
+	CLOSE cur_indicator;
+	SET cur_done=0;
+	SET v_indicator_count_col=CONCAT(LEFT(v_indicator_count_col,CHAR_LENGTH(v_indicator_count_col)-2),'\',\'\') AS record');
+	
+	-- 获取人群组
+	OPEN cur_group;
+		read_group_loop: LOOP
+			FETCH cur_group INTO v_group_id;
+			IF cur_done=1 THEN
+				LEAVE read_group_loop;
+			END IF;
+				-- 获取人群组指标
+				SET v_group_condition=' 1=1 ';
+				OPEN cur_group_indicator;
+					read_group_indicator_loop:LOOP
+					FETCH cur_group_indicator INTO v_group_indicator_id,v_indicator_col_name;
+					IF cur_done=1 THEN
+						LEAVE read_group_indicator_loop;
+					END IF;
+						SET v_group_condition = CONCAT(v_group_condition, ' AND (');
+						-- 获取人群指标值
+						OPEN cur_group_indicator_value;
+							reread_group_indicator_value_loopd:LOOP
+								FETCH cur_group_indicator_value INTO v_indicator_value;
+								IF cur_done=1 THEN
+									LEAVE reread_group_indicator_value_loopd;
+								END IF;
+								SET v_group_condition =  CONCAT(v_group_condition,' ',v_indicator_col_name,'=\'',v_indicator_value,'\' OR');
+							END LOOP;
+						CLOSE cur_group_indicator_value;
+						SET cur_done=0;
+						SET v_group_condition =  CONCAT(LEFT(v_group_condition,CHAR_LENGTH(v_group_condition)-2),  ' ) ');
+
+					END LOOP;
+				CLOSE cur_group_indicator;
+			
+			-- 执行基础维度巡检
+			SET v_base_dim_count_step=1;
+			WHILE v_base_dim_count_step<=v_base_dim_count DO
+				SELECT dim_id,dim_value,population_col_name INTO v_base_dim_id,v_base_dim_value,v_base_dim_population_col FROM tmp_dim LIMIT 1;
+				DELETE FROM tmp_dim LIMIT 1;
+				SET v_group_condition_fianl =CONCAT(v_group_condition,' AND ',v_base_dim_population_col,'=\'',v_base_dim_value,'\' '); -- 设置维度条件
+				
+				
+				
+				-- 执行统计并生成插入语句
+				SET @s_count_integrity = CONCAT('SELECT ',v_indicator_count_col,' INTO @v_count_total,@v_insert_sql FROM ',population_table_name,' WHERE ',v_group_condition_fianl);
+				PREPARE stmt_count_integrity FROM @s_count_integrity;  
+				SET @v_count_total=0;
+				SET @v_insert_sql='';
+				EXECUTE stmt_count_integrity ;
+				DEALLOCATE PREPARE stmt_count_integrity;
+
+				SET @v_group_id=v_group_id;
+				
+				SET @v_base_dim_id=v_base_dim_id;
+				SET @v_base_dim_value=v_base_dim_value;
+
+				-- 执行数据插入
+				PREPARE stmt_int_integrity FROM @v_insert_sql;
+				EXECUTE stmt_int_integrity;
+				DEALLOCATE PREPARE stmt_int_integrity;
+
+
+				SET v_base_dim_count_step=v_base_dim_count_step+1;
+
+			END WHILE;
+
+			-- 无维度巡检
+			-- 执行统计并生成插入语句
+			SET @s_count_integrity = CONCAT('SELECT ',v_indicator_count_col,' INTO @v_count_total,@v_insert_sql FROM ',population_table_name,' WHERE ',v_group_condition);
+			PREPARE stmt_count_integrity FROM @s_count_integrity;  
+			SET @v_count_total=0;
+			SET @v_insert_sql='';
+			EXECUTE stmt_count_integrity ;
+			DEALLOCATE PREPARE stmt_count_integrity;
+
+			SET @v_group_id=v_group_id;
+			
+			SET @v_base_dim_id='';
+			SET @v_base_dim_value='';
+
+			-- 执行数据插入
+			PREPARE stmt_int_integrity FROM @v_insert_sql;
+			EXECUTE stmt_int_integrity;
+			DEALLOCATE PREPARE stmt_int_integrity;
+
+			SET cur_done=0;
+
+		END LOOP;
+	CLOSE cur_group;
+	DROP TABLE IF EXISTS tmp_dim; -- 删除临时表
+END L_END
