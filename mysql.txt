@@ -1,3 +1,73 @@
+举例：
+SELECT c.CustomerId, CompanyName FROM Customers c WHERE EXISTS( 
+	SELECT OrderID FROM Orders o WHERE o.CustomerID = cu.CustomerID
+);
+EXISTS用于检查子查询是否至少会返回一行数据，该子查询实际上并不返回任何数据，而是返回值True或False
+EXISTS 指定一个子查询，检测行的存在。语法：EXISTS subquery。参数 subquery 是一个受限的 SELECT 语句 （不允许有 COMPUTE 子句和 INTO 关键字）。结果类型为 Boolean，如果子查询包含行，则返回 TRUE。
+
+
+字段拼接
+concat（字段1，'连接符号1', 字段2, '连接符号2', 字段3 ） 连接符号是可以不同的
+concat_ws( '连接符号', 字段1, 字段2, 字段3 ) 用同一个连接符号做拼接
+group_concat() 对group操作后的字段的拼接显示
+Trim函数去除空格
+Rtrim函数去除右边的空格
+
+
+select提供了测试的功能，比如说： select 3-4; select now();
+对字段赋null,直接字段=null 即可，但是前提是该字段设置是允许为null的
+
+
+日期函数 （时间字段the_time，datetime或者timestamp类型）
+date(the_time)：只返回日期部分
+time(the_time)：只返回时间部分
+day(the_time)： 只返回天数部分 返回值是非补零的情况，year()和month()也是如此
+hour(the_time)：只返回小时部分
+举例子：订单表order中the_time字段存储了下单的时间，现在需要找出在2016年9月份这一个月的所有订单
+sql：select * from order where year(the_time) = 2016 and month(the_time) = 9;
+
+unix_timestamp(now()) 将日期转换成时间戳
+from_unixtime(时间戳) 将时间戳转换成日期
+
+count()函数
+1.count(*)对表中的所有行进行统计，包括字段为null的情况
+2.count(字段) 对该字段中非null的行数进行统计
+
+
+自联结查询（同一个表的查询，通过使用用表别名）
+举例：表product，vend_id字段表示供应商id、 prod_id字段表示商品id
+需求：需要知道商品id=99的供应商的商品有哪一些
+sql： select * from product p1, product p2 where p1.vend_id = p2.vend_id and p2.prod_id=99;
+注意：一般用于取缔子查询
+
+外部联结（其实就是左查询和右查询）
+left join ：获取左边表的所有行，如果右边表没有则置为null
+right join：获取右边表的所有行，如果左边表没有则置为null
+
+
+视图
+1.视图的语句不能包含子查询，需要把子查询做成视图，然后嵌套调用
+2.视图不能使用索引，触发器和默认值，所以要考虑性能
+3.视图可以与表一起使用，同一个sql语句
+
+
+
+===============================
+mysql变量的术语分类：
+1.用户变量：以"@"开始，形式为"@变量名"
+用户变量跟mysql客户端是绑定的，设置的变量，只对当前用户使用的客户端生效
+
+2.全局变量：定义时，以如下两种形式出现，set GLOBAL 变量名  或者  set @@global.变量名 
+对所有客户端生效。只有具有super权限才可以设置全局变量
+
+3.会话变量：只对连接的客户端有效。
+
+4.局部变量：作用范围在begin到end语句块之间。在该语句块里设置的变量
+declare语句专门用于定义局部变量。set语句是设置不同类型的变量，包括会话变量和全局变量、局部变量
+
+
+===============================
+流程语句；
 CASE when的用法
 在一般的SELECT中，其语法格式如下：
 SELECT <myColumnSpec> = 
@@ -35,7 +105,6 @@ IF(condition,result1,result2)  如果condition为ture则返回result1，否则返回result2
 
 
 
-===============================
 IF ELSE 做为流程控制语句使用
 
 if实现条件判断，满足不同条件执行不同的操作，存储过程中的if是如何使用的吧
@@ -71,6 +140,28 @@ end if;
 END 
 
 
+case 语句；实现上面的逻辑
+create procedure dbname.proc_getGrade (stu_no varchar(20),cour_no varchar(10))  
+BEGIN 
+declare stu_grade float;  
+select grade into stu_grade from grade where student_no=stu_no and course_no=cour_no; 
+case
+when stu_grade>=90 then 
+    select stu_grade,'A';  
+when stu_grade<90 and stu_grade>=80 then 
+    select stu_grade,'B';  
+when stu_grade<80 and stu_grade>=70 then 
+    select stu_grade,'C';  
+when stu_grade70 and stu_grade>=60 then 
+    select stu_grade,'D';  
+else 
+    select stu_grade,'E';  
+end case;  
+END 
+
+
+
+
 ==================================
 循环语句
 (1) WHILE循环
@@ -91,6 +182,45 @@ END
  UNTIL 条件
  END  REPEAT  [ label ];
 
+
+
+
+==================================
+存储过程
+1.需要使用 delimiter 分隔符 来临时定义sql的语句分隔符，是的在存储过程中;能够被正确解析，除了 \ ，其他都可以作为语句分隔符
+2.存储过程和函数中如果要用set来设置局部变量的值，需要先用declare来声明局部变量，不然就直接使用用户变量 set @param = 1，另外select into语句也可以给变量赋值
+3.条件的定义；
+  declare 条件名称 condition for 条件值
+  条件值可以是；SQLSTATE '状态码'  或者 mysql_error_code
+4.条件的处理；
+  declare 处理类型 handler for 条件值 sql操作语句
+  处理类型可以是；
+      1.continue
+      2.exit
+  条件值可以是；
+      1.SQLSTATE '状态码'
+      2.条件定义中的条件名称
+      3.not found  所有以02开头的代码速记
+      4.sqlwarming 所有以01开头的代码速记
+      5.sqlexception:除了not found和sqlwarming 之外的 sqlstate的代码速记
+      6.mysql_error_code
+  
+例子；
+DECLARE over tinyint(1) default 0;
+DECLARE other_over tinyint(1) default 0;
+DECLARE chong_fu_primary CONDITION for SQLSTATE "23000";     -- 条件定义，定义重复主键报错的处理，这个错误代码可以网上查找，在mysql5.7之后可以通过GET DIAGNOSTICS 来获取
+DECLARE CONTINUE HANDLER for chong_fu_primary set over=8;    -- 条件处理，使用了条件定义，如果触发了该条件，就执行将over值设置为99，然后继续
+-- DECLARE CONTINUE HANDLER for SQLSTATE "23000" set over=9; -- 条件处理，直接通过sqlstate来处理
+
+-- 使用块
+DECLARE CONTINUE HANDLER for SQLSTATE '23000' BEGIN
+	set over = 1;
+	set other_over = 9;
+end;
+
+游标的使用中，经常使用；not found 这个处理类型来定义游标数据找不到的情况，定义如下
+declare continue handler for not found set over=1;
+declare continue handler for not found close 游标名称;
 
 ==================================
 游标
