@@ -40,6 +40,22 @@ view输出json格式
 ==========================================
 yii\db\Connection 提供基类db的createCommand方法 返回一个db对象
 yii\db\Query      封装了一层的db操作类，基于yii\db\Connection的封装
+有时候，你也许想要测试或者使用一个由 yii\db\Query 对象创建的 SQL 语句。 你可以使用以下的代码来达到目的：
+
+$command = (new \yii\db\Query())
+    ->select(['id', 'email'])
+    ->from('user')
+    ->where(['last_name' => 'Smith'])
+    ->limit(10)
+    ->createCommand();
+    
+// 打印 SQL 语句
+echo $command->sql;
+// 打印被绑定的参数
+print_r($command->params);
+
+// 返回查询结果的所有行
+$rows = $command->queryAll();
 
 
 
