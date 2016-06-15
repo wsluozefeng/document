@@ -1,0 +1,31 @@
+1.
+set是ngx_rewrite模块的指令，可用于创建变量、赋值变量
+例如：
+set $name 'ajia';
+
+2.
+echo是ngx_echo模块的指令，用于输出值，ngx_echo模块不在nginx的源码中，需要新增
+例如：
+set $name 'ajia';
+echo "my name is $ajia";
+
+3.对于变量，需要先通过set创建才能够使用，否则nginx报错，另外，通过set创建的变量，可以在全局使用，即使是不同的server块间，但是赋值只会在响应的执行中生效，
+  也就是说，变量的创建是共享的，而赋值是独立互补干扰的
+
+4. Nginx 变量值容器的生命期是与当前正在处理的请求绑定的，而与 location 无关
+   server {
+        listen 8080;
+ 
+        location /foo {
+            set $a hello;
+            echo_exec /bar;  # ngx_echo模块 提供的 echo_exec 配置指令，发起到 location /bar 的“内部跳转”，所谓“内部跳转”，就是在处理请求的过程中，于服务器内部，从一个 location 跳转到另一个 location 的过程
+        }
+ 
+        location /bar {
+            echo "a = [$a]";
+        }
+    }
+
+   通过curl 访问/foo的接口，得到的是：a=[hello]；
+   ps：这不同于利用 HTTP 状态码 301 和 302 所进行的“外部跳转”，因为后者是由 HTTP 客户端配合进行跳转的，而且在客户端，用户可以通过浏览器地址栏这样的界面，看到请求的 URL 地址发生了变化。
+       内部跳转和 Bourne Shell（或 Bash）中的 exec 命令很像，都是“有去无回”。另一个相近的例子是 C 语言中的 goto 语句。
